@@ -31,13 +31,7 @@ No web server needed. Works in any modern browser (Chrome, Edge, Firefox, Safari
 
 ### Option B — Serve locally (optional)
 
-```bash
-npx serve .
-# or
-python -m http.server 8080
-```
-
-Then open `http://localhost:8080/bank_reconciliation_tool.html`.
+open `https://greemexico-bankreconciliation.netlify.app/`.
 
 ---
 
