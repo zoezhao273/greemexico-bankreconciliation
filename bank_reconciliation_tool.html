@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bank Reconciliation Tool</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap');
+
+  :root {
+    --ink: #1a1a1a;
+    --ink2: #4a4a4a;
+    --ink3: #8a8a8a;
+    --paper: #f5f2eb;
+    --paper2: #ede9df;
+    --paper3: #e3dfd3;
+    --accent: #1d4e3a;
+    --accent2: #2d6b50;
+    --accent-light: #e8f2ed;
+    --warn: #7a3a1a;
+    --warn-light: #fdf0e8;
+    --match: #1d4e3a;
+    --match-light: #e8f2ed;
+    --border: #ccc8bc;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+
+  /* Subtle grid texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.25;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  header {
+    margin-bottom: 48px;
+  }
+
+  .logo-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .logo-dot {
+    width: 10px; height: 10px;
+    background: var(--accent);
+    border-radius: 50%;
+  }
+
+  .label-tag {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink3);
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 300;
+    font-size: clamp(28px, 5vw, 42px);
+    line-height: 1.1;
+    color: var(--ink);
+    margin-bottom: 12px;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .subtitle {
+    font-size: 12px;
+    color: var(--ink3);
+    line-height: 1.7;
+    max-width: 520px;
+  }
+
+  /* Upload zone */
+  .upload-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  @media (max-width: 680px) { .upload-grid { grid-template-columns: 1fr; } }
+  @media (min-width: 681px) and (max-width: 860px) { .upload-grid { grid-template-columns: 1fr 1fr; } }
+
+  .upload-card {
+    background: white;
+    border: 1.5px dashed var(--border);
+    border-radius: 8px;
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+
+  .upload-card:hover { border-color: var(--accent); background: var(--accent-light); }
+  .upload-card.dragover { border-color: var(--accent); background: var(--accent-light); }
+  .upload-card.loaded { border-style: solid; border-color: var(--accent); background: var(--accent-light); }
+
+  .upload-card input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+
+  .upload-icon {
+    font-size: 28px;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  .upload-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+
+  .upload-hint {
+    font-size: 10px;
+    color: var(--ink3);
+    line-height: 1.6;
+  }
+
+  .upload-filename {
+    font-size: 10px;
+    color: var(--accent);
+    margin-top: 8px;
+    word-break: break-all;
+    display: none;
+  }
+
+  .upload-card.loaded .upload-filename { display: block; }
+  .upload-card.loaded .upload-hint { display: none; }
+  .upload-card.loaded .upload-icon { filter: none; }
+
+  /* Run button */
+  .run-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 16px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    margin-bottom: 32px;
+  }
+
+  .run-btn:hover:not(:disabled) { background: var(--accent2); transform: translateY(-1px); }
+  .run-btn:disabled { background: var(--ink3); cursor: not-allowed; transform: none; }
+
+  .run-btn .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+
+  .run-btn.loading .spinner { display: block; }
+  .run-btn.loading .btn-text { display: none; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Status / log */
+  .log-box {
+    background: var(--ink);
+    color: #a8d5a2;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 16px;
+    border-radius: 8px;
+    line-height: 1.8;
+    margin-bottom: 28px;
+    display: none;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .log-box.visible { display: block; }
+  .log-line.warn { color: #f5c97a; }
+  .log-line.error { color: #f08080; }
+  .log-line.ok { color: #a8d5a2; }
+  .log-line.info { color: #8ac4e0; }
+
+  /* Results */
+  .results { display: none; }
+  .results.visible { display: block; }
+
+  .results-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .results-title {
+    font-family: 'Fraunces', serif;
+    font-size: 20px;
+    font-weight: 300;
+  }
+
+  .download-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+
+  .download-btn:hover { background: var(--accent2); }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  @media (max-width: 600px) { .stats-row { grid-template-columns: repeat(2,1fr); } }
+
+  .stat-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .stat-num {
+    font-family: 'Fraunces', serif;
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--ink);
+    display: block;
+  }
+
+  .stat-num.warn { color: var(--warn); }
+  .stat-num.ok   { color: var(--match); }
+
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink3);
+    margin-top: 4px;
+    display: block;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 0;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .tab-btn {
+    padding: 10px 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ink3);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s;
+  }
+
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+
+  /* Table */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    background: white;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  thead th {
+    background: var(--ink);
+    color: white;
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  tbody tr { border-bottom: 1px solid var(--paper3); }
+  tbody tr:last-child { border-bottom: none; }
+
+  tbody td {
+    padding: 10px 16px;
+    white-space: nowrap;
+  }
+
+  .td-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  tr.matched { background: var(--match-light); }
+  tr.unmatched-a td:first-child { background: var(--warn-light); }
+  tr.unmatched-b td:nth-child(2) { background: var(--warn-light); }
+
+  .note-text { color: var(--warn); font-size: 11px; }
+  .blank-cell { color: var(--ink3); }
+
+  tfoot td {
+    background: var(--paper2);
+    font-weight: 500;
+    padding: 12px 16px;
+    border-top: 2px solid var(--border);
+  }
+
+  /* Instructions */
+  .instructions {
+    margin-top: 40px;
+    border-top: 1px solid var(--border);
+    padding-top: 28px;
+  }
+
+  .instructions h3 {
+    font-family: 'Fraunces', serif;
+    font-weight: 300;
+    font-size: 16px;
+    margin-bottom: 16px;
+    color: var(--ink2);
+  }
+
+  .step-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .step-list li {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    font-size: 12px;
+    color: var(--ink2);
+    line-height: 1.6;
+  }
+
+  .step-num {
+    flex-shrink: 0;
+    width: 22px; height: 22px;
+    background: var(--accent);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 500;
+    margin-top: 1px;
+  }
+
+  .error-banner {
+    background: #fdf0e8;
+    border: 1px solid #e8a080;
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--warn);
+    margin-bottom: 16px;
+    display: none;
+  }
+  .options-row {
+    margin-bottom: 16px;
+  }
+
+  .option-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 18px;
+    transition: border-color 0.2s, background 0.2s;
+    user-select: none;
+    width: 100%;
+  }
+
+  .option-toggle:hover { border-color: var(--accent); background: var(--accent-light); }
+
+  .option-toggle input[type=checkbox] { display: none; }
+
+  .toggle-track {
+    flex-shrink: 0;
+    position: relative;
+    width: 36px; height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    transition: background 0.2s;
+  }
+
+  .option-toggle input:checked ~ .toggle-track { background: var(--accent); }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 14px; height: 14px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  .option-toggle input:checked ~ .toggle-track .toggle-thumb { transform: translateX(16px); }
+
+  .option-text { display: flex; flex-direction: column; gap: 2px; }
+  .option-title { font-size: 12px; font-weight: 500; color: var(--ink); }
+  .option-desc  { font-size: 10px; color: var(--ink3); }
+
+  .nomina-badge {
+    display: inline-block;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--warn-light);
+    color: var(--warn);
+    border: 1px solid #e8c0a0;
+    margin-left: 6px;
+    vertical-align: middle;
+    letter-spacing: 0.05em;
+  }
+
+  .bank-badge {
+    display: inline-block;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #e8f0fd;
+    color: #2a4a8a;
+    border: 1px solid #b0c8f0;
+    margin-left: 6px;
+    vertical-align: middle;
+    letter-spacing: 0.05em;
+  }
+
+  .upload-card.optional {
+    border-style: dashed;
+    opacity: 0.85;
+  }
+
+  .upload-card.optional:hover { opacity: 1; }
+  .upload-card.optional.loaded { opacity: 1; border-style: solid; }
+
+  .optional-tag {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink3);
+    margin-top: 6px;
+    display: block;
+  }
+
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo-row">
+      <div class="logo-dot"></div>
+      <span class="label-tag">ICBC · Santander · GREE Mexico</span>
+    </div>
+    <h1>Bank <em>Reconciliation</em><br>Tool</h1>
+    <p class="subtitle">Upload the NCC Bank Journal (.xlsx) and one or both Bank Statements — ICBC (.csv, UTF-16) and/or Santander (.csv, comma-separated). The tool compares inflows and outflows, flags discrepancies, and exports a ready-to-use reconciliation file.</p>
+  </header>
+
+  <div class="upload-grid">
+    <div class="upload-card" id="card-ncc" ondragover="drag(event,'ncc')" ondragleave="undrag('ncc')" ondrop="drop(event,'ncc')">
+      <input type="file" id="file-ncc" accept=".xlsx,.xls" onchange="fileChosen('ncc',this)">
+      <span class="upload-icon">📒</span>
+      <div class="upload-title">NCC Bank Journal</div>
+      <div class="upload-hint">Accounting system export<br>.xlsx format<br>Headers auto-detected & skipped</div>
+      <div class="upload-filename" id="name-ncc"></div>
+    </div>
+
+    <div class="upload-card" id="card-bank" ondragover="drag(event,'bank')" ondragleave="undrag('bank')" ondrop="drop(event,'bank')">
+      <input type="file" id="file-bank" accept=".csv" onchange="fileChosen('bank',this)">
+      <span class="upload-icon">🏦</span>
+      <div class="upload-title">ICBC Statement</div>
+      <div class="upload-hint">ICBC bank export<br>.csv format (UTF-16)<br>Headers auto-detected & skipped</div>
+      <div class="upload-filename" id="name-bank"></div>
+    </div>
+
+    <div class="upload-card optional" id="card-san" ondragover="drag(event,'san')" ondragleave="undrag('san')" ondrop="drop(event,'san')">
+      <input type="file" id="file-san" accept=".csv" onchange="fileChosen('san',this)">
+      <span class="upload-icon">🏧</span>
+      <div class="upload-title">Santander Statement</div>
+      <div class="upload-hint">Santander bank export<br>.csv (comma-separated)<br>Col E = summary, F = ±, G = amount</div>
+      <div class="upload-filename" id="name-san"></div>
+      <span class="optional-tag">optional</span>
+    </div>
+  </div>
+
+  <div class="options-row">
+    <label class="option-toggle" id="nomina-label">
+      <input type="checkbox" id="nomina-check" checked onchange="onNominaChange()">
+      <span class="toggle-track">
+        <span class="toggle-thumb"></span>
+      </span>
+      <span class="option-text">
+        <span class="option-title">Nómina Include</span>
+        <span class="option-desc">Include Bank Outflow entries with "Nomina" or "Payroll" in summary</span>
+      </span>
+    </label>
+  </div>
+
+  <div class="error-banner" id="err-banner"></div>
+
+  <button class="run-btn" id="run-btn" onclick="run()" disabled>
+    <div class="spinner"></div>
+    <span class="btn-text">▶ Run Reconciliation</span>
+  </button>
+
+  <div class="log-box" id="log-box"></div>
+
+  <div class="results" id="results">
+    <div class="results-header">
+      <span class="results-title">Results</span>
+      <button class="download-btn" id="dl-btn" onclick="downloadXlsx()">⬇ Download Excel</button>
+    </div>
+
+    <div class="stats-row" id="stats-row"></div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('inflow',this)">Inflow</button>
+      <button class="tab-btn" onclick="switchTab('outflow',this)">Outflow</button>
+    </div>
+
+    <div class="table-wrap">
+      <table id="preview-table">
+        <thead id="tbl-head"></thead>
+        <tbody id="tbl-body"></tbody>
+        <tfoot id="tbl-foot"></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="instructions">
+    <h3>How to use</h3>
+    <ul class="step-list">
+      <li><div class="step-num">1</div><span>Export the monthly NCC Bank Journal (.xlsx) from your accounting system. Export ICBC statement (.csv, UTF-16) and/or Santander statement (.csv, comma-separated) from your bank portals.</span></li>
+      <li><div class="step-num">2</div><span>Drag files into the upload areas above. ICBC and Santander are optional individually — upload one or both. NCC Journal is always required.</span></li>
+      <li><div class="step-num">3</div><span>Click <strong>Run Reconciliation</strong>. The tool auto-detects formats, skips subtotal rows, sorts by amount, and compares line by line.</span></li>
+      <li><div class="step-num">4</div><span>Preview the discrepancies on screen, then click <strong>Download Excel</strong> to save the reconciliation report with two worksheets.</span></li>
+      <li><div class="step-num">5</div><span>Yellow highlight = entry missing on one side. Green = matched. The Note column explains each discrepancy.</span></li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+let nccFile = null, bankFile = null, sanFile = null;
+let inflowData = [], outflowData = [];
+let bankOutflowsAll = [];
+let nccOutflowsAll  = [];
+let currentTab = 'inflow';
+
+function onNominaChange() {
+  if (!document.getElementById('results').classList.contains('visible')) return;
+  const include = document.getElementById('nomina-check').checked;
+  const nominaCount = bankOutflowsAll.filter(v => v.isNomina).length;
+  const filtered = include ? bankOutflowsAll : bankOutflowsAll.filter(v => !v.isNomina);
+  outflowData = reconcile(nccOutflowsAll, filtered, 'Outflow');
+  const outMatched = outflowData.filter(r => r.ncc !== null && r.bank !== null).length;
+  const outMissing = outflowData.filter(r => r.note !== '').length;
+  const inMatched  = inflowData.filter(r => r.ncc !== null && r.bank !== null).length;
+  const inMissing  = inflowData.filter(r => r.note !== '').length;
+  renderStats(inMatched, inMissing, outMatched, outMissing);
+  if (currentTab === 'outflow') renderTable('outflow');
+  document.querySelector('.option-desc').textContent = include
+    ? `Bank Outflow includes "Nomina/Payroll" entries (${nominaCount} total)`
+    : `Bank Outflow excludes "Nomina/Payroll" entries (${nominaCount} total)`;
+}
+
+// ── File handling ─────────────────────────────────────────────────────────────
+function fileChosen(side, input) {
+  const f = input.files[0];
+  if (!f) return;
+  if (side === 'ncc') nccFile = f;
+  else if (side === 'bank') bankFile = f;
+  else if (side === 'san') sanFile = f;
+  document.getElementById('card-' + side).classList.add('loaded');
+  document.getElementById('name-' + side).textContent = f.name;
+  checkReady();
+}
+
+function drag(e, side) { e.preventDefault(); document.getElementById('card-'+side).classList.add('dragover'); }
+function undrag(side) { document.getElementById('card-'+side).classList.remove('dragover'); }
+function drop(e, side) {
+  e.preventDefault(); undrag(side);
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  if (side === 'ncc') nccFile = f;
+  else if (side === 'bank') bankFile = f;
+  else if (side === 'san') sanFile = f;
+  document.getElementById('card-'+side).classList.add('loaded');
+  document.getElementById('name-'+side).textContent = f.name;
+  checkReady();
+}
+
+function checkReady() {
+  // NCC is always required; at least one bank file required
+  document.getElementById('run-btn').disabled = !(nccFile && (bankFile || sanFile));
+}
+
+// ── Logging ───────────────────────────────────────────────────────────────────
+function log(msg, type='ok') {
+  const box = document.getElementById('log-box');
+  box.classList.add('visible');
+  const line = document.createElement('div');
+  line.className = 'log-line ' + type;
+  line.textContent = '› ' + msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearLog() {
+  const box = document.getElementById('log-box');
+  box.innerHTML = '';
+  box.classList.remove('visible');
+}
+
+function showError(msg) {
+  const b = document.getElementById('err-banner');
+  b.textContent = '⚠ ' + msg;
+  b.classList.add('visible');
+}
+
+function clearError() {
+  document.getElementById('err-banner').classList.remove('visible');
+}
+
+// ── Parse NCC xlsx ────────────────────────────────────────────────────────────
+function parseNCC(buffer) {
+  const wb = XLSX.read(buffer, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+  // cols: 0=month, 1=day, 2=voucher_no, 3=description, 4=counterpart, 5=debit(inflow), 6=credit(outflow)
+  //
+  // Skip strategy: use voucher number (col 2) as the primary signal.
+  // Every real transaction has a voucher number (e.g. AP-0051, CM-0003).
+  // Every summary row (daily/monthly/annual subtotals, opening balance, etc.) has an empty voucher number.
+  // This is more robust than keyword-matching descriptions, which can accidentally
+  // skip legitimate transactions whose descriptions happen to contain subtotal keywords.
+  const inflows = [], outflows = [];
+  let skipped = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const voucher = row[2] ? String(row[2]).trim() : '';
+    if (!voucher) { skipped++; continue; }   // no voucher = header or summary row
+    const summary = row[3] ? String(row[3]).trim() : '';
+    const debit  = parseAmt(row[5]);
+    const credit = parseAmt(row[6]);
+    if (debit  !== null && debit  !== 0) inflows.push({ amt: debit,  summary });
+    if (credit !== null && credit !== 0) outflows.push({ amt: credit, summary });
+  }
+  log(`NCC: ${inflows.length} inflow rows, ${outflows.length} outflow rows (skipped ${skipped} header/subtotal rows)`);
+  return { inflows, outflows };
+}
+
+// ── Parse Bank CSV (UTF-16 tab-separated) ─────────────────────────────────────
+function parseBank(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let text;
+  if (bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    text = new TextDecoder('utf-16').decode(bytes);
+  } else {
+    text = new TextDecoder('utf-8').decode(bytes);
+  }
+  const lines = text.split('\r\n');
+  const inflows = [], outflows = [];
+  let skipped = 0;
+  let prevBalance = null;
+
+  const parseN = s => {
+    if (!s) return null;
+    s = s.replace(/"/g, '').replace(/,/g, '').trim();
+    if (s.length > 15) return null; // reject account numbers
+    const v = parseFloat(s);
+    return (!isNaN(v) && v > 0) ? Math.round(v * 100) / 100 : null;
+  };
+
+  for (let i = 7; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const parts = line.split('\t');
+    if (parts[0].includes('合计') || parts[0].includes('Total')) { skipped++; continue; } // '合计' = Chinese for 'total' — matches the bank CSV summary row
+    if (parts.length < 12) continue;
+
+    const summary = (parts[7] || '').replace(/"/g, '').trim();
+
+    // Collect all positive numbers in monetary zone (tabs 10-14).
+    // The LAST number is always the running balance; everything before it is the transaction amount.
+    const monetary = [];
+    for (let k = 10; k <= 14 && k < parts.length; k++) {
+      const v = parseN(parts[k]);
+      if (v !== null) monetary.push({ k, v });
+    }
+    if (monetary.length === 0) continue;
+
+    const currBalance = monetary[monetary.length - 1].v;
+
+    if (prevBalance !== null) {
+      const amt = Math.round(Math.abs(currBalance - prevBalance) * 100) / 100;
+      if (amt < 0.01) { prevBalance = currBalance; continue; }
+      const delta = currBalance - prevBalance;
+      if (delta > 0) inflows.push({ amt, summary, isNomina: false });
+      else           outflows.push({ amt, summary, isNomina: /nomina|payroll/i.test(summary) });
+    } else {
+      // First row: no prev balance — use tab position to determine direction.
+      // Tab[10] or [11] = inflow amount (normal or column-shifted row).
+      // Tab[12] = outflow amount.
+      if (monetary.length >= 2) {
+        const { k: amtK, v: amt } = monetary[0];
+        if (amtK === 10 || amtK === 11) inflows.push({ amt, summary, isNomina: false });
+        else                             outflows.push({ amt, summary, isNomina: /nomina|payroll/i.test(summary) });
+      }
+    }
+
+    prevBalance = currBalance;
+  }
+
+  const nominaCount = outflows.filter(v => v.isNomina).length;
+  log(`Bank: ${inflows.length} inflow rows, ${outflows.length} outflow rows (${nominaCount} Nómina entries)`);
+  return { inflows, outflows };
+}
+
+// ── Parse Santander CSV (comma-separated, UTF-8) ──────────────────────────────
+// Format: Row 1 = header. Cols (0-based): E(4)=Descripcion, F(5)=Cargo/Abono (+/-), G(6)=Importe
+// No total/summary rows. Leading single quotes on field values stripped.
+function parseSantander(buffer) {
+  const bytes = new Uint8Array(buffer);
+  // Try UTF-16 BOM first, fallback UTF-8
+  let text;
+  if (bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    text = new TextDecoder('utf-16').decode(bytes);
+  } else {
+    text = new TextDecoder('utf-8').decode(bytes);
+  }
+
+  const lines = text.split(/\r?\n/);
+  const inflows = [], outflows = [];
+
+  // Parse a CSV line respecting comma-separation (fields may be quoted)
+  function parseLine(line) {
+    const fields = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQ = !inQ; }
+      else if (c === ',' && !inQ) { fields.push(cur.trim()); cur = ''; }
+      else { cur += c; }
+    }
+    fields.push(cur.trim());
+    // Strip leading apostrophe (Santander prefixes some fields with ')
+    return fields.map(f => f.startsWith("'") ? f.slice(1) : f);
+  }
+
+  // Row 0 is header — skip it. Process from row 1.
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const cols = parseLine(line);
+    if (cols.length < 7) continue;
+
+    const summary  = (cols[4] || '').trim();   // E = Descripcion
+    const sign     = (cols[5] || '').trim();   // F = + or -
+    const amtRaw   = (cols[6] || '').replace(/,/g, '').trim(); // G = Importe
+    const amt      = parseFloat(amtRaw);
+    if (isNaN(amt) || amt <= 0) continue;
+    const rounded  = Math.round(amt * 100) / 100;
+
+    if (sign === '+') {
+      inflows.push({ amt: rounded, summary, isNomina: false, source: 'Santander' });
+    } else if (sign === '-') {
+      outflows.push({ amt: rounded, summary, isNomina: /nomina|payroll/i.test(summary), source: 'Santander' });
+    }
+    // rows without a clear +/- sign are skipped
+  }
+
+  const nominaCount = outflows.filter(v => v.isNomina).length;
+  log(`Santander: ${inflows.length} inflow rows, ${outflows.length} outflow rows (${nominaCount} Nómina entries)`);
+  return { inflows, outflows };
+}
+
+function parseAmt(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const s = String(v).replace(/,/g, '').trim();
+  // Strict check: must be a pure number (digits, optional leading minus, optional decimal point).
+  // Rejects strings like '2026-04--2026-04' or column header text that parseFloat partially parses.
+  if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
+  const n = parseFloat(s);
+  return isNaN(n) ? null : Math.round(n * 100) / 100;
+}
+
+// ── Reconciliation logic ──────────────────────────────────────────────────────
+function reconcile(nccList, bankList, side) {
+  // each item: { amt, summary, isNomina?, source? }
+  const ncc  = [...nccList].sort((a,b) => a.amt - b.amt);
+  const bank = [...bankList].sort((a,b) => a.amt - b.amt);
+  const result = [];
+  let i = 0, j = 0;
+  while (i < ncc.length || j < bank.length) {
+    const nv = i < ncc.length  ? ncc[i]  : null;
+    const bv = j < bank.length ? bank[j] : null;
+    if (nv === null) {
+      result.push({ ncc: null, nccSum: '', bank: bv.amt, bankSum: bv.summary, note: `Bank ${side} but not yet in NCC`, isNomina: bv.isNomina||false, bankSource: bv.source||'' });
+      j++;
+    } else if (bv === null) {
+      result.push({ ncc: nv.amt, nccSum: nv.summary, bank: null, bankSum: '', note: `NCC ${side} but not yet in Bank`, isNomina: false, bankSource: '' });
+      i++;
+    } else if (nv.amt === bv.amt) {
+      result.push({ ncc: nv.amt, nccSum: nv.summary, bank: bv.amt, bankSum: bv.summary, note: '', isNomina: bv.isNomina||false, bankSource: bv.source||'' });
+      i++; j++;
+    } else if (nv.amt > bv.amt) {
+      result.push({ ncc: null, nccSum: '', bank: bv.amt, bankSum: bv.summary, note: `Bank ${side} but not yet in NCC`, isNomina: bv.isNomina||false, bankSource: bv.source||'' });
+      j++;
+    } else {
+      result.push({ ncc: nv.amt, nccSum: nv.summary, bank: null, bankSum: '', note: `NCC ${side} but not yet in Bank`, isNomina: false, bankSource: '' });
+      i++;
+    }
+  }
+  return result;
+}
+
+// ── Main run ──────────────────────────────────────────────────────────────────
+async function run() {
+  clearLog(); clearError();
+  document.getElementById('results').classList.remove('visible');
+  const btn = document.getElementById('run-btn');
+  btn.classList.add('loading'); btn.disabled = true;
+
+  try {
+    log('Reading NCC Bank Journal...', 'info');
+    const nccBuf  = await readFile(nccFile);
+    const nccData = parseNCC(nccBuf);
+
+    // Merged bank data from ICBC and/or Santander
+    let allBankInflows  = [];
+    let allBankOutflows = [];
+
+    if (bankFile) {
+      log('Reading ICBC Bank Statement...', 'info');
+      const bankBuf  = await readFile(bankFile);
+      const bankData = parseBank(bankBuf);
+      bankData.inflows.forEach(r  => { r.source = 'ICBC'; allBankInflows.push(r); });
+      bankData.outflows.forEach(r => { r.source = 'ICBC'; allBankOutflows.push(r); });
+    }
+
+    if (sanFile) {
+      log('Reading Santander Bank Statement...', 'info');
+      const sanBuf  = await readFile(sanFile);
+      const sanData = parseSantander(sanBuf);
+      sanData.inflows.forEach(r  => allBankInflows.push(r));
+      sanData.outflows.forEach(r => allBankOutflows.push(r));
+    }
+
+    log('Running reconciliation...', 'info');
+    bankOutflowsAll = allBankOutflows;
+    nccOutflowsAll  = nccData.outflows;
+    const includeNomina = document.getElementById('nomina-check').checked;
+    const nominaCount = bankOutflowsAll.filter(v => v.isNomina).length;
+    const bankOutFiltered = includeNomina ? bankOutflowsAll : bankOutflowsAll.filter(v => !v.isNomina);
+    inflowData  = reconcile(nccData.inflows, allBankInflows,  'Inflow');
+    outflowData = reconcile(nccOutflowsAll,  bankOutFiltered, 'Outflow');
+    document.querySelector('.option-desc').textContent = includeNomina
+      ? `Bank Outflow includes "Nomina/Payroll" entries (${nominaCount} total)`
+      : `Bank Outflow excludes "Nomina/Payroll" entries (${nominaCount} total)`;
+
+    const inMatched  = inflowData.filter(r => r.ncc !== null && r.bank !== null).length;
+    const inMissing  = inflowData.filter(r => r.note !== '').length;
+    const outMatched = outflowData.filter(r => r.ncc !== null && r.bank !== null).length;
+    const outMissing = outflowData.filter(r => r.note !== '').length;
+
+    log(`Inflow: ${inMatched} matched, ${inMissing} discrepancies`);
+    log(`Outflow: ${outMatched} matched, ${outMissing} discrepancies`);
+    log('Done ✓', 'ok');
+
+    renderStats(inMatched, inMissing, outMatched, outMissing);
+    renderTable('inflow');
+    document.getElementById('results').classList.add('visible');
+
+  } catch(e) {
+    showError(e.message || String(e));
+    log('Error: ' + (e.message || e), 'error');
+  } finally {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+  }
+}
+
+function readFile(f) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = () => rej(new Error('Failed to read ' + f.name));
+    r.readAsArrayBuffer(f);
+  });
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function fmt(v) {
+  if (v === null || v === undefined) return '';
+  return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function renderStats(inM, inD, outM, outD) {
+  const row = document.getElementById('stats-row');
+  row.innerHTML = `
+    <div class="stat-card"><span class="stat-num ok">${inM}</span><span class="stat-label">Inflow Matched</span></div>
+    <div class="stat-card"><span class="stat-num ${inD>0?'warn':'ok'}">${inD}</span><span class="stat-label">Inflow Gaps</span></div>
+    <div class="stat-card"><span class="stat-num ok">${outM}</span><span class="stat-label">Outflow Matched</span></div>
+    <div class="stat-card"><span class="stat-num ${outD>0?'warn':'ok'}">${outD}</span><span class="stat-label">Outflow Gaps</span></div>
+  `;
+}
+
+function switchTab(tab, btn) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable(tab);
+}
+
+function renderTable(tab) {
+  const data = tab === 'inflow' ? inflowData : outflowData;
+  const colA = tab === 'inflow' ? 'NCC Inflow' : 'NCC Outflow';
+  const colB = tab === 'inflow' ? 'Bank Inflow' : 'Bank Outflow';
+
+  document.getElementById('tbl-head').innerHTML = `
+    <tr><th>${colA}</th><th>Summary</th><th>${colB}</th><th>Summary</th><th>Note</th></tr>`;
+
+  let sumA = 0, sumB = 0;
+  const tbody = document.getElementById('tbl-body');
+  tbody.innerHTML = '';
+
+  data.forEach(row => {
+    const matched = row.ncc !== null && row.bank !== null;
+    const cls = matched ? 'matched' : (row.ncc === null ? 'unmatched-b' : 'unmatched-a');
+    const tr = document.createElement('tr');
+    tr.className = cls;
+    const nominaBadge = row.isNomina ? '<span class="nomina-badge">NÓMINA/PAYROLL</span>' : '';
+    const sourceBadge = (row.bankSource && (bankFile && sanFile)) ? `<span class="bank-badge">${row.bankSource}</span>` : '';
+    tr.innerHTML = `
+      <td class="td-num ${row.ncc === null ? 'blank-cell' : ''}">${row.ncc !== null ? fmt(row.ncc) : '—'}</td>
+      <td class="${row.ncc === null ? 'blank-cell' : ''}">${row.nccSum || ''}</td>
+      <td class="td-num ${row.bank === null ? 'blank-cell' : ''}">${row.bank !== null ? fmt(row.bank) : '—'}</td>
+      <td class="${row.bank === null ? 'blank-cell' : ''}">${row.bankSum || ''}${nominaBadge}${sourceBadge}</td>
+      <td class="note-text">${row.note || ''}</td>`;
+    tbody.appendChild(tr);
+    if (row.ncc  !== null) sumA += row.ncc;
+    if (row.bank !== null) sumB += row.bank;
+  });
+
+  document.getElementById('tbl-foot').innerHTML = `
+    <tr>
+      <td class="td-num"><strong>${fmt(sumA)}</strong></td>
+      <td></td>
+      <td class="td-num"><strong>${fmt(sumB)}</strong></td>
+      <td></td>
+      <td><strong>Total</strong></td>
+    </tr>`;
+}
+
+// ── Download XLSX ─────────────────────────────────────────────────────────────
+function downloadXlsx() {
+  const wb = XLSX.utils.book_new();
+
+  function buildSheet(data, colA, colB) {
+    const rows = [[colA, 'Summary', colB, 'Summary', 'Note']];
+    let sumA = 0, sumB = 0;
+    data.forEach(r => {
+      rows.push([r.ncc ?? '', r.nccSum || '', r.bank ?? '', r.bankSum || '', r.note || '']);
+      if (r.ncc  !== null) sumA += r.ncc;
+      if (r.bank !== null) sumB += r.bank;
+    });
+    rows.push([sumA, '', sumB, '', 'Total']);
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 16 }, { wch: 42 }, { wch: 16 }, { wch: 42 }, { wch: 38 }];
+    return ws;
+  }
+
+  XLSX.utils.book_append_sheet(wb, buildSheet(inflowData,  'NCC Inflow',  'Bank Inflow'),  'Inflow Reconciliation');
+  XLSX.utils.book_append_sheet(wb, buildSheet(outflowData, 'NCC Outflow', 'Bank Outflow'), 'Outflow Reconciliation');
+
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
+  XLSX.writeFile(wb, `Bank_Reconciliation_${stamp}.xlsx`);
+}
+</script>
+</body>
+</html>
