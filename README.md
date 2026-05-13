@@ -32,7 +32,7 @@ No web server needed. Works in any modern browser (Chrome, Edge, Firefox, Safari
 ### Option B — Serve locally (optional)
 
 ```
-open `https://greemexico-bankreconciliation.netlify.app/`.
+https://greemexico-bankreconciliation.netlify.app/
 ```
 ---
 
